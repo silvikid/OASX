@@ -27,6 +27,9 @@ class SettingsController extends GetxController {
   final username = ''.obs;
   final password = ''.obs;
 
+  /// 首页「任务日期分布」的起始星期：today / monday / sunday。
+  final dashboardWeekOrder = 'today'.obs;
+
   @override
   void onInit() {
     autoLoginAfterDeploy.value =
@@ -37,6 +40,8 @@ class SettingsController extends GetxController {
     updateProxyUrl.value = storage.read(StorageKey.updateProxyUrl.name) ?? '';
     username.value = storage.read(StorageKey.username.name) ?? '';
     password.value = storage.read(StorageKey.password.name) ?? '';
+    dashboardWeekOrder.value =
+        storage.read(StorageKey.dashboardWeekOrder.name) ?? 'today';
 
     initTemporaryDirectory();
     getCurrentVersion().then((value) {
@@ -65,6 +70,12 @@ class SettingsController extends GetxController {
   void updateAutoDeploy(bool nv) {
     autoDeploy.value = nv;
     storage.write(StorageKey.autoDeploy.name, nv);
+  }
+
+  /// 更新「任务日期分布」的起始星期。
+  void updateDashboardWeekOrder(String value) {
+    dashboardWeekOrder.value = value;
+    storage.write(StorageKey.dashboardWeekOrder.name, value);
   }
 
   void updateAddress(String value) {

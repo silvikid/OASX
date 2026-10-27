@@ -52,8 +52,50 @@ class OasSettingsCard extends StatelessWidget {
           right: const Icon(Icons.input_rounded),
           onTap: killServer,
         ),
+        const SettingItem(
+          left: Text('首页日期分布起始'),
+          right: DashboardWeekOrderSelector(),
+        ),
       ],
     );
+  }
+}
+
+/// 选择首页「任务日期分布」从星期几开始排。
+class DashboardWeekOrderSelector extends StatelessWidget {
+  const DashboardWeekOrderSelector({super.key});
+
+  static const _options = <String, String>{
+    'today': '今天在最前',
+    'monday': '周一在最前',
+    'sunday': '周日在最前',
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = Get.find<SettingsController>();
+    return Obx(() {
+      final value = controller.dashboardWeekOrder.value;
+      return DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: _options.containsKey(value) ? value : 'today',
+          isDense: true,
+          borderRadius: BorderRadius.circular(9),
+          items: [
+            for (final entry in _options.entries)
+              DropdownMenuItem<String>(
+                value: entry.key,
+                child: Text(entry.value, style: const TextStyle(fontSize: 13)),
+              ),
+          ],
+          onChanged: (next) {
+            if (next != null) {
+              controller.updateDashboardWeekOrder(next);
+            }
+          },
+        ),
+      );
+    });
   }
 }
 

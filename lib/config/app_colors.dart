@@ -39,9 +39,9 @@ class AppColors {
   static Color textFor(Brightness b) =>
       _pick(b, const Color(0xFF1B1F24), const Color(0xFFE8EAED));
   static Color text2For(Brightness b) =>
-      _pick(b, const Color(0xFF5A6472), const Color(0xFF9AA3AF));
+      _pick(b, const Color(0xFF3F4653), const Color(0xFFB6BEC9));
   static Color text3For(Brightness b) =>
-      _pick(b, const Color(0xFF8B94A3), const Color(0xFF6B7280));
+      _pick(b, const Color(0xFF626B79), const Color(0xFF9AA3B0));
 
   // Accents
   static Color tealFor(Brightness b) =>

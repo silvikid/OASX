@@ -20,4 +20,7 @@ enum StorageKey {
   homeWorkbenchCollectionWidth,
   homeWorkbenchSplitRatio,
   autoDeploy,
+  currencyVisibleKeys,
+  currencyOrder,
+  dashboardWeekOrder,
 }

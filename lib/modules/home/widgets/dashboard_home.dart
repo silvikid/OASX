@@ -4,11 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:oasx/api/api_client.dart';
 import 'package:oasx/config/app_colors.dart';
+import 'package:oasx/modules/settings/controllers/settings_controller.dart';
 import 'package:oasx/modules/home/config_actions.dart';
 import 'package:oasx/modules/home/controllers/dashboard_controller.dart';
 import 'package:oasx/modules/home/models/config_model.dart';
 import 'package:oasx/modules/home/models/dashboard_task_helpers.dart';
 import 'package:oasx/modules/home/models/script_statistics_models.dart';
+import 'package:oasx/modules/home/widgets/currency_snapshot_panel.dart';
 import 'package:oasx/modules/home/widgets/log_center_panel.dart';
 import 'package:oasx/modules/home/widgets/statistics_panel.dart';
 import 'package:oasx/modules/home/widgets/task_config_dialog.dart';
@@ -90,8 +92,10 @@ class _AllConfigsDialog extends StatefulWidget {
 class _AllConfigsDialogState extends State<_AllConfigsDialog> {
   final TextEditingController _searchController = TextEditingController();
   String _query = '';
+
   /// 已有生效的连接组时，进来就直接展示连接状态（勾选框可见）。
-  late bool _linkMode = widget.startInLinkMode ||
+  late bool _linkMode =
+      widget.startInLinkMode ||
       widget.controller.validLinkedScripts.length >= 2;
 
   @override
@@ -115,18 +119,16 @@ class _AllConfigsDialogState extends State<_AllConfigsDialog> {
     }
   }
 
-  /// 点链条按钮：进入连接模式 / 断开全部连接。
-  void _toggleLinkMode() {
-    if (_linkMode) {
-      // 断开：关闭连接模式会一并清空勾选，勾选框随之隐藏。
-      if (widget.controller.isLinkModeEnabled.value) {
-        widget.controller.toggleLinkMode();
-      }
-      setState(() => _linkMode = false);
-      return;
-    }
+  /// 进入连接模式（不清空已有勾选）。
+  void _enterLinkMode() {
     _ensureLinkEnabled();
     setState(() => _linkMode = true);
+  }
+
+  /// 清空全部勾选，但保持连接模式：勾选框和两个按钮都留在面板上。
+  void _disconnectAll() {
+    _ensureLinkEnabled();
+    widget.controller.linkedScriptList.clear();
   }
 
   /// 启停某个配置：走和顶栏标签相同的级联逻辑（连接生效时一起启停）。
@@ -148,6 +150,41 @@ class _AllConfigsDialogState extends State<_AllConfigsDialog> {
     widget.controller.setScriptLinked(name, selected);
   }
 
+  /// 一次把所有配置都勾上，省得逐个点。
+  void _linkAll() {
+    _ensureLinkEnabled();
+    for (final name in widget.scriptService.scriptOrderList) {
+      widget.controller.setScriptLinked(name, true);
+    }
+  }
+
+  /// 标题行里的连接操作按钮：紧凑样式，窄窗口下也不容易把文字挤掉。
+  Widget _linkActionButton({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onPressed,
+  }) {
+    return TextButton.icon(
+      onPressed: onPressed,
+      style: TextButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        minimumSize: Size.zero,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        visualDensity: VisualDensity.compact,
+      ),
+      icon: Icon(icon, size: 15, color: color),
+      label: Text(
+        label,
+        style: TextStyle(
+          fontSize: 12.5,
+          fontWeight: FontWeight.w500,
+          color: color,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Obx(() {
@@ -158,8 +195,8 @@ class _AllConfigsDialogState extends State<_AllConfigsDialog> {
       final filtered = keyword.isEmpty
           ? names
           : names
-              .where((name) => name.toLowerCase().contains(keyword))
-              .toList();
+                .where((name) => name.toLowerCase().contains(keyword))
+                .toList();
       var runningCount = 0;
       for (final name in names) {
         if (_stateOf(name) == ScriptState.running) {
@@ -177,26 +214,26 @@ class _AllConfigsDialogState extends State<_AllConfigsDialog> {
           children: [
             const Text('全部配置'),
             const SizedBox(width: 8),
-            Text(
-              '共 ${names.length} 个 · 运行中 $runningCount',
-              style: TextStyle(fontSize: 12, color: AppColors.text3),
+            Expanded(
+              child: Text(
+                '共 ${names.length} 个 · 运行中 $runningCount',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 12, color: AppColors.text3),
+              ),
             ),
-            const Spacer(),
-            TextButton.icon(
-              onPressed: _toggleLinkMode,
-              icon: Icon(
-                _linkMode ? Icons.link_off_rounded : Icons.link_rounded,
-                size: 15,
-                color: _linkMode ? AppColors.yellow : AppColors.teal,
+            if (_linkMode)
+              _linkActionButton(
+                icon: Icons.done_all_rounded,
+                label: '全部连接',
+                color: AppColors.teal,
+                onPressed: _linkAll,
               ),
-              label: Text(
-                _linkMode ? '断开连接' : '连接',
-                style: TextStyle(
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w500,
-                  color: _linkMode ? AppColors.yellow : AppColors.teal,
-                ),
-              ),
+            _linkActionButton(
+              icon: _linkMode ? Icons.link_off_rounded : Icons.link_rounded,
+              label: _linkMode ? '断开连接' : '连接',
+              color: _linkMode ? AppColors.yellow : AppColors.teal,
+              onPressed: _linkMode ? _disconnectAll : _enterLinkMode,
             ),
           ],
         ),
@@ -220,8 +257,8 @@ class _AllConfigsDialogState extends State<_AllConfigsDialog> {
               const SizedBox(height: 8),
               Text(
                 _linkMode
-                    ? '勾选即连接：勾上的配置会一起启停、一起执行任务；点「断开连接」可解除全部。'
-                    : '点右上角「连接」后，每个配置前会出现勾选框。',
+                    ? '勾选即连接：勾上的配置会一起启停、一起执行任务；点「全部连接」一次勾上所有配置，点「断开连接」只清空勾选，面板继续保持连接模式。'
+                    : '点上方「连接」后，每个配置前会出现勾选框。',
                 style: TextStyle(
                   fontSize: 11.5,
                   height: 1.5,
@@ -234,18 +271,21 @@ class _AllConfigsDialogState extends State<_AllConfigsDialog> {
                     ? Center(
                         child: Text(
                           '没有匹配的配置',
-                          style: TextStyle(fontSize: 12.5, color: AppColors.text3),
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            color: AppColors.text3,
+                          ),
                         ),
                       )
                     : GridView.builder(
                         padding: EdgeInsets.zero,
                         gridDelegate:
                             const SliverGridDelegateWithMaxCrossAxisExtent(
-                          maxCrossAxisExtent: 168,
-                          mainAxisExtent: 42,
-                          crossAxisSpacing: 8,
-                          mainAxisSpacing: 8,
-                        ),
+                              maxCrossAxisExtent: 168,
+                              mainAxisExtent: 42,
+                              crossAxisSpacing: 8,
+                              mainAxisSpacing: 8,
+                            ),
                         itemCount: filtered.length,
                         itemBuilder: (context, index) {
                           final name = filtered[index];
@@ -353,9 +393,7 @@ class _AllConfigsTile extends StatelessWidget {
     final warning = state == ScriptState.warning;
     // 和顶栏配置标签上的启停按钮保持同一套样式与图标。
     final powerButton = Tooltip(
-      message: running
-          ? '停止该配置'
-          : (warning ? '配置已卡死，点击重新启动' : '启动该配置'),
+      message: running ? '停止该配置' : (warning ? '配置已卡死，点击重新启动' : '启动该配置'),
       waitDuration: const Duration(milliseconds: 350),
       child: InkWell(
         borderRadius: BorderRadius.circular(8),
@@ -407,8 +445,10 @@ class _AllConfigsTile extends StatelessWidget {
               Container(
                 width: 7,
                 height: 7,
-                decoration:
-                    BoxDecoration(color: _accent, shape: BoxShape.circle),
+                decoration: BoxDecoration(
+                  color: _accent,
+                  shape: BoxShape.circle,
+                ),
               ),
               const SizedBox(width: 8),
               Expanded(child: nameText),
@@ -471,10 +511,7 @@ class _AllConfigsTile extends StatelessWidget {
               ),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.only(right: 4),
-            child: powerButton,
-          ),
+          Padding(padding: const EdgeInsets.only(right: 4), child: powerButton),
         ],
       ),
     );
@@ -553,19 +590,19 @@ class _DashboardHomeState extends State<DashboardHome> {
                   onOpenScriptConfig: script == null
                       ? null
                       : () => showTaskConfigDialog(
-                            context,
-                            controller: _controller,
-                            scriptName: script.name,
-                            taskName: 'Script',
-                          ),
+                          context,
+                          controller: _controller,
+                          scriptName: script.name,
+                          taskName: 'Script',
+                        ),
                   onOpenGlobalConfig: script == null
                       ? null
                       : () => showTaskConfigDialog(
-                            context,
-                            controller: _controller,
-                            scriptName: script.name,
-                            taskName: 'GlobalGame',
-                          ),
+                          context,
+                          controller: _controller,
+                          scriptName: script.name,
+                          taskName: 'GlobalGame',
+                        ),
                 ),
                 Expanded(
                   child: KeyedSubtree(
@@ -619,7 +656,8 @@ class _DashboardHomeState extends State<DashboardHome> {
             0 => _buildTasksColumn(script),
             1 => _buildOverviewColumn(script),
             2 => _LogsColumn(scriptName: scriptName),
-            _ => _StatisticsColumn(Theme.of(context).brightness),
+            3 => _StatisticsColumn(Theme.of(context).brightness),
+            _ => _CurrencyColumn(Theme.of(context).brightness),
           },
         ),
       ],
@@ -714,75 +752,75 @@ class _DashboardHeader extends StatelessWidget {
           ),
           // 手机界面只保留配置标签，+/− 及其右侧的所有按钮都隐藏。
           if (!compact) ...[
-          const SizedBox(width: 6),
-          _SquareButton(
-            tooltip: '新增脚本',
-            onTap: onAddScriptTap,
-            child: Icon(
-              Icons.add_rounded,
-              size: 16,
-              color: AppColors.text2,
+            const SizedBox(width: 6),
+            _SquareButton(
+              tooltip: '新增脚本',
+              onTap: onAddScriptTap,
+              child: Icon(Icons.add_rounded, size: 16, color: AppColors.text2),
             ),
-          ),
-          const SizedBox(width: 6),
-          _SquareButton(
-            tooltip: I18n.delete.tr,
-            onTap: activeName.isEmpty ? null : () => _deleteActive(activeName),
-            child: Icon(
-              Icons.remove_rounded,
-              size: 16,
-              color: AppColors.text2,
+            const SizedBox(width: 6),
+            _SquareButton(
+              tooltip: I18n.delete.tr,
+              onTap: activeName.isEmpty
+                  ? null
+                  : () => _deleteActive(activeName),
+              child: Icon(
+                Icons.remove_rounded,
+                size: 16,
+                color: AppColors.text2,
+              ),
             ),
-          ),
-          const SizedBox(width: 8),
-          _SquareButton(
-            tooltip: AppColors.isDark ? '切换到白天' : '切换到黑夜',
-            onTap: () {
-              if (Get.isRegistered<ThemeService>()) {
-                Get.find<ThemeService>().switchTheme();
-              }
-            },
-            child: Icon(
-              AppColors.isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
-              size: 15,
-              color: AppColors.text2,
+            const SizedBox(width: 8),
+            _SquareButton(
+              tooltip: AppColors.isDark ? '切换到白天' : '切换到黑夜',
+              onTap: () {
+                if (Get.isRegistered<ThemeService>()) {
+                  Get.find<ThemeService>().switchTheme();
+                }
+              },
+              child: Icon(
+                AppColors.isDark
+                    ? Icons.light_mode_rounded
+                    : Icons.dark_mode_rounded,
+                size: 15,
+                color: AppColors.text2,
+              ),
             ),
-          ),
-          const SizedBox(width: 8),
-          _SquareButton(
-            // 这个分支只面向模拟器：固定图标与文案，不再区分桌面版。
-            tooltip: '模拟器配置',
-            onTap: onOpenScriptConfig,
-            child: Icon(
-              Icons.phone_android_rounded,
-              size: 15,
-              color: AppColors.text2,
+            const SizedBox(width: 8),
+            _SquareButton(
+              // 这个分支只面向模拟器：固定图标与文案，不再区分桌面版。
+              tooltip: '模拟器配置',
+              onTap: onOpenScriptConfig,
+              child: Icon(
+                Icons.phone_android_rounded,
+                size: 15,
+                color: AppColors.text2,
+              ),
             ),
-          ),
-          const SizedBox(width: 8),
-          _SquareButton(
-            tooltip: '全局配置',
-            onTap: onOpenGlobalConfig,
-            child: Icon(
-              Icons.public_rounded,
-              size: 15,
-              color: AppColors.text2,
+            const SizedBox(width: 8),
+            _SquareButton(
+              tooltip: '全局配置',
+              onTap: onOpenGlobalConfig,
+              child: Icon(
+                Icons.public_rounded,
+                size: 15,
+                color: AppColors.text2,
+              ),
             ),
-          ),
-          const SizedBox(width: 8),
-          // 只有连接异常时才出现；正常运行时不再占位。
-          _HeaderStatusChip(
-            controller: controller,
-            scriptService: scriptService,
-          ),
-          Text(
-            formatHhMm(now),
-            style: TextStyle(
-              fontSize: 12.5,
-              color: AppColors.text2,
-              fontFeatures: const [FontFeature.tabularFigures()],
+            const SizedBox(width: 8),
+            // 只有连接异常时才出现；正常运行时不再占位。
+            _HeaderStatusChip(
+              controller: controller,
+              scriptService: scriptService,
             ),
-          ),
+            Text(
+              formatHhMm(now),
+              style: TextStyle(
+                fontSize: 12.5,
+                color: AppColors.text2,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
           ],
         ],
       ),
@@ -828,7 +866,8 @@ class _HeaderStatusChip extends StatelessWidget {
   Widget build(BuildContext context) {
     return Obx(() {
       final checking = controller.isStartupChecking.value;
-      final connected = !checking &&
+      final connected =
+          !checking &&
           !controller.isStartupConnectionFailed.value &&
           scriptService.scriptOrderList.isNotEmpty;
       if (connected) {
@@ -884,15 +923,13 @@ class _MobilePageTabs extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const labels = <String>['任务', '总览', '日志', '统计'];
+    const labels = <String>['任务', '总览', '日志', '统计', '资产'];
     return Row(
       children: [
         for (var i = 0; i < labels.length; i++)
           Expanded(
             child: Padding(
-              padding: EdgeInsets.only(
-                right: i == labels.length - 1 ? 0 : 8,
-              ),
+              padding: EdgeInsets.only(right: i == labels.length - 1 ? 0 : 8),
               child: _MobileTabChip(
                 label: labels[i],
                 selected: i == index,
@@ -928,7 +965,9 @@ class _MobileTabChip extends StatelessWidget {
           color: selected ? AppColors.tealDim : AppColors.surface2,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: selected ? AppColors.teal.withValues(alpha: 0.45) : AppColors.border,
+            color: selected
+                ? AppColors.teal.withValues(alpha: 0.45)
+                : AppColors.border,
           ),
         ),
         child: Text(
@@ -997,81 +1036,83 @@ class _AccountTab extends StatelessWidget {
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
         child: Container(
-        height: 34,
-        padding: const EdgeInsets.symmetric(horizontal: 9),
-        decoration: BoxDecoration(
-          // 连接中的配置即使没被选中，也给一层淡青底 + 青色描边。
-          color: active
-              ? AppColors.tealDim
-              : (linked
-                  ? AppColors.tealDim.withValues(alpha: 0.55)
-                  : AppColors.surface2),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
+          height: 34,
+          padding: const EdgeInsets.symmetric(horizontal: 9),
+          decoration: BoxDecoration(
+            // 连接中的配置即使没被选中，也给一层淡青底 + 青色描边。
             color: active
-                ? AppColors.teal.withValues(alpha: 0.55)
+                ? AppColors.tealDim
                 : (linked
-                    ? AppColors.teal.withValues(alpha: 0.45)
-                    : AppColors.border),
-            width: active || linked ? 1.5 : 1,
+                      ? AppColors.tealDim.withValues(alpha: 0.55)
+                      : AppColors.surface2),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: active
+                  ? AppColors.teal.withValues(alpha: 0.55)
+                  : (linked
+                        ? AppColors.teal.withValues(alpha: 0.45)
+                        : AppColors.border),
+              width: active || linked ? 1.5 : 1,
+            ),
           ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 8,
-              height: 8,
-              decoration: BoxDecoration(
-                color: accent,
-                shape: BoxShape.circle,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: accent,
+                  shape: BoxShape.circle,
+                ),
               ),
-            ),
-            const SizedBox(width: 8),
-            Text(
-              name,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: active || linked ? FontWeight.w600 : FontWeight.w400,
-                color: active || linked ? AppColors.teal : AppColors.text2,
-              ),
-            ),
-            if (linked) ...[
-              const SizedBox(width: 4),
-              Icon(Icons.link_rounded, size: 12, color: AppColors.teal),
-            ],
-            if (onTogglePower != null) ...[
               const SizedBox(width: 8),
-              Tooltip(
-                message: _powerTip,
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(8),
-                  onTap: onTogglePower,
-                  child: Container(
-                    width: 26,
-                    height: 26,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: _running || _warning
-                          ? accent.withValues(alpha: 0.14)
-                          : AppColors.surface3,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
+              Text(
+                name,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: active || linked
+                      ? FontWeight.w600
+                      : FontWeight.w400,
+                  color: active || linked ? AppColors.teal : AppColors.text2,
+                ),
+              ),
+              if (linked) ...[
+                const SizedBox(width: 4),
+                Icon(Icons.link_rounded, size: 12, color: AppColors.teal),
+              ],
+              if (onTogglePower != null) ...[
+                const SizedBox(width: 8),
+                Tooltip(
+                  message: _powerTip,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(8),
+                    onTap: onTogglePower,
+                    child: Container(
+                      width: 26,
+                      height: 26,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
                         color: _running || _warning
-                            ? accent.withValues(alpha: 0.6)
-                            : AppColors.border,
+                            ? accent.withValues(alpha: 0.14)
+                            : AppColors.surface3,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: _running || _warning
+                              ? accent.withValues(alpha: 0.6)
+                              : AppColors.border,
+                        ),
                       ),
-                    ),
-                    child: Icon(
-                      Icons.power_settings_new_rounded,
-                      size: 14,
-                      color: _running || _warning ? accent : AppColors.text3,
+                      child: Icon(
+                        Icons.power_settings_new_rounded,
+                        size: 14,
+                        color: _running || _warning ? accent : AppColors.text3,
+                      ),
                     ),
                   ),
                 ),
-              ),
+              ],
             ],
-          ],
           ),
         ),
       ),
@@ -1118,11 +1159,7 @@ class _AllConfigsButton extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                Icons.grid_view_rounded,
-                size: 13,
-                color: AppColors.text2,
-              ),
+              Icon(Icons.grid_view_rounded, size: 13, color: AppColors.text2),
               const SizedBox(width: 5),
               Text(
                 '全部 $count',
@@ -1141,11 +1178,7 @@ class _AllConfigsButton extends StatelessWidget {
 }
 
 class _SquareButton extends StatelessWidget {
-  const _SquareButton({
-    required this.child,
-    required this.tooltip,
-    this.onTap,
-  });
+  const _SquareButton({required this.child, required this.tooltip, this.onTap});
 
   final Widget child;
   final String tooltip;
@@ -1196,8 +1229,7 @@ class _TasksColumn extends StatefulWidget {
 class _TasksColumnState extends State<_TasksColumn> {
   /// 「立即执行 / 已延后」的绿色标记。键里带日期下标，
   /// 否则在「今天」点过的任务切到其它日期后会继续显示绿色。
-  final Map<String, _QuickAction> _appliedActions =
-      <String, _QuickAction>{};
+  final Map<String, _QuickAction> _appliedActions = <String, _QuickAction>{};
 
   String _appliedKey(String taskName, {int? dayIndex}) =>
       '${dayIndex ?? widget.selectedDayIndex}|$taskName';
@@ -1302,84 +1334,82 @@ class _TasksColumnState extends State<_TasksColumn> {
                     child: entries.isEmpty
                         ? const _EmptyHint(label: '当日暂无任务')
                         : ListView.builder(
-                                padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-                                itemCount: entries.length,
-                                itemBuilder: (context, index) => _TaskRowTile(
-                                  entry: entries[index],
-                                  selected: index == 0,
-                                  locked: _isTaskCurrentlyRunning(
-                                    script,
+                            padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                            itemCount: entries.length,
+                            itemBuilder: (context, index) => _TaskRowTile(
+                              entry: entries[index],
+                              selected: index == 0,
+                              locked: _isTaskCurrentlyRunning(
+                                script,
+                                entries[index].name,
+                              ),
+                              onToggleEnabled: script == null
+                                  ? null
+                                  : () => _toggleTaskEnabled(
+                                      script.name,
+                                      entries[index].name,
+                                      false,
+                                    ),
+                              appliedAction:
+                                  _appliedActions[_appliedKey(
                                     entries[index].name,
-                                  ),
-                                  onToggleEnabled: script == null
-                                      ? null
-                                      : () => _toggleTaskEnabled(
-                                            script.name,
-                                            entries[index].name,
-                                            false,
-                                          ),
-                                  appliedAction: _appliedActions[
-                                      _appliedKey(entries[index].name)],
-                                  onRun: script == null
-                                      ? null
-                                      : () async {
-                                          final taskName = entries[index].name;
-                                          final ok = await widget.controller
-                                              .quickScheduleTaskAcrossLink(
+                                  )],
+                              onRun: script == null
+                                  ? null
+                                  : () async {
+                                      final taskName = entries[index].name;
+                                      final ok = await widget.controller
+                                          .quickScheduleTaskAcrossLink(
                                             scriptName: script.name,
                                             taskName: taskName,
                                             runNow: true,
                                           );
-                                          if (ok) {
-                                            setState(() {
-                                              // 立即执行会把任务挪到今天并自动切到
-                                              // 「今天」页，标记也要写在今天上。
-                                              _appliedActions[_appliedKey(
+                                      if (ok) {
+                                        setState(() {
+                                          // 立即执行会把任务挪到今天并自动切到
+                                          // 「今天」页，标记也要写在今天上。
+                                          _appliedActions[_appliedKey(
                                                 taskName,
                                                 dayIndex: 0,
-                                              )] = _QuickAction.run;
-                                            });
-                                            showToast(
-                                              '立即执行',
-                                              taskName.tr,
-                                            );
-                                          }
-                                          if (widget.selectedDayIndex != 0) {
-                                            widget.onSelectDay(0);
-                                          }
-                                        },
-                                  onWait: script == null
-                                      ? null
-                                      : () async {
-                                          final taskName = entries[index].name;
-                                          final ok = await widget.controller
-                                              .quickScheduleTaskAcrossLink(
+                                              )] =
+                                              _QuickAction.run;
+                                        });
+                                        showToast('立即执行', taskName.tr);
+                                      }
+                                      if (widget.selectedDayIndex != 0) {
+                                        widget.onSelectDay(0);
+                                      }
+                                    },
+                              onWait: script == null
+                                  ? null
+                                  : () async {
+                                      final taskName = entries[index].name;
+                                      final ok = await widget.controller
+                                          .quickScheduleTaskAcrossLink(
                                             scriptName: script.name,
                                             taskName: taskName,
                                             runNow: false,
                                           );
-                                          if (ok) {
-                                            setState(() {
-                                              _appliedActions[
-                                                  _appliedKey(taskName)] =
-                                                  _QuickAction.wait;
-                                            });
-                                            showToast(
-                                              '已延后',
-                                              taskName.tr,
-                                            );
-                                          }
-                                        },
-                                  onEdit: script == null
-                                      ? null
-                                      : () => showTaskConfigDialog(
-                                            context,
-                                            controller: widget.controller,
-                                            scriptName: script.name,
-                                            taskName: entries[index].name,
-                                          ),
-                                ),
-                              ),
+                                      if (ok) {
+                                        setState(() {
+                                          _appliedActions[_appliedKey(
+                                                taskName,
+                                              )] =
+                                              _QuickAction.wait;
+                                        });
+                                        showToast('已延后', taskName.tr);
+                                      }
+                                    },
+                              onEdit: script == null
+                                  ? null
+                                  : () => showTaskConfigDialog(
+                                      context,
+                                      controller: widget.controller,
+                                      scriptName: script.name,
+                                      taskName: entries[index].name,
+                                    ),
+                            ),
+                          ),
                   ),
                 ],
               ),
@@ -1477,10 +1507,7 @@ class _PanelToolbar extends StatelessWidget {
                     minHeight: 32,
                   ),
                   hintText: '搜索任务',
-                  hintStyle: TextStyle(
-                    fontSize: 12.5,
-                    color: AppColors.text3,
-                  ),
+                  hintStyle: TextStyle(fontSize: 12.5, color: AppColors.text3),
                 ),
                 onSubmitted: (_) => onSearch?.call(),
               ),
@@ -1516,7 +1543,9 @@ class _TaskViewChip extends StatelessWidget {
           color: selected ? AppColors.tealDim : AppColors.surface2,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: selected ? AppColors.teal.withValues(alpha: 0.45) : AppColors.border,
+            color: selected
+                ? AppColors.teal.withValues(alpha: 0.45)
+                : AppColors.border,
           ),
         ),
         child: Text(
@@ -1759,10 +1788,13 @@ class _CatalogGroupHeader extends StatelessWidget {
                 title,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 11.5, color: AppColors.text3),
+                style: TextStyle(fontSize: 13, color: AppColors.text2),
               ),
             ),
-            Text('$count', style: TextStyle(fontSize: 11.5, color: AppColors.text3)),
+            Text(
+              '$count',
+              style: TextStyle(fontSize: 12, color: AppColors.text3),
+            ),
           ],
         ),
       ),
@@ -1793,8 +1825,9 @@ class _CatalogTaskChip extends StatelessWidget {
   final VoidCallback? onOpen;
 
   /// Grey used for actions that cannot be used because the task is disabled.
-  Color get _kDisabled =>
-      AppColors.isDark ? AppColors.text3.withValues(alpha: 0.3) : const Color(0xFFB4B4B4);
+  Color get _kDisabled => AppColors.isDark
+      ? AppColors.text3.withValues(alpha: 0.3)
+      : const Color(0xFFB4B4B4);
 
   @override
   Widget build(BuildContext context) {
@@ -1807,7 +1840,9 @@ class _CatalogTaskChip extends StatelessWidget {
         height: 32,
         padding: const EdgeInsets.symmetric(horizontal: 6),
         decoration: BoxDecoration(
-          color: enabled ? AppColors.teal.withValues(alpha: 0.10) : AppColors.surface2,
+          color: enabled
+              ? AppColors.teal.withValues(alpha: 0.10)
+              : AppColors.surface2,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
             color: enabled
@@ -1833,8 +1868,8 @@ class _CatalogTaskChip extends StatelessWidget {
                     color: locked
                         ? AppColors.green
                         : enabled
-                            ? AppColors.teal
-                            : AppColors.text3,
+                        ? AppColors.teal
+                        : AppColors.text3,
                   ),
                 ),
               )
@@ -1856,7 +1891,9 @@ class _CatalogTaskChip extends StatelessWidget {
               _chipIcon(
                 Icons.flash_on_rounded,
                 canRun
-                    ? (appliedAction == _QuickAction.run ? AppColors.teal : AppColors.text3)
+                    ? (appliedAction == _QuickAction.run
+                          ? AppColors.teal
+                          : AppColors.text3)
                     : _kDisabled,
                 canRun ? onRun : null,
                 enabled ? '立即执行' : '任务未启用',
@@ -1865,7 +1902,9 @@ class _CatalogTaskChip extends StatelessWidget {
               _chipIcon(
                 Icons.schedule_rounded,
                 canWait
-                    ? (appliedAction == _QuickAction.wait ? AppColors.blue : AppColors.text3)
+                    ? (appliedAction == _QuickAction.wait
+                          ? AppColors.blue
+                          : AppColors.text3)
                     : _kDisabled,
                 canWait ? onWait : null,
                 enabled ? '延后执行' : '任务未启用',
@@ -1901,7 +1940,16 @@ class _CatalogTaskChip extends StatelessWidget {
   }
 }
 
-class _DateDistributionCard extends StatelessWidget {
+enum _WeekOrder { today, monday, sunday }
+
+// Maps the persisted `dashboardWeekOrder` string to the strip order.
+_WeekOrder _parseWeekOrder(String? value) => switch (value) {
+  'monday' => _WeekOrder.monday,
+  'sunday' => _WeekOrder.sunday,
+  _ => _WeekOrder.today,
+};
+
+class _DateDistributionCard extends StatefulWidget {
   const _DateDistributionCard({
     required this.entries,
     required this.selectedIndex,
@@ -1913,9 +1961,54 @@ class _DateDistributionCard extends StatelessWidget {
   final ValueChanged<int> onSelect;
 
   @override
+  State<_DateDistributionCard> createState() => _DateDistributionCardState();
+}
+
+class _DateDistributionCardState extends State<_DateDistributionCard> {
+  SettingsController? _settings;
+  Worker? _orderWorker;
+  _WeekOrder _order = _WeekOrder.today;
+
+  @override
+  void initState() {
+    super.initState();
+    if (!Get.isRegistered<SettingsController>()) {
+      return;
+    }
+    _settings = Get.find<SettingsController>();
+    _order = _parseWeekOrder(_settings!.dashboardWeekOrder.value);
+    // 设置页改动后立即生效，不用重新进页面
+    _orderWorker = ever<String>(_settings!.dashboardWeekOrder, (value) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _order = _parseWeekOrder(value));
+    });
+  }
+
+  @override
+  void dispose() {
+    _orderWorker?.dispose();
+    super.dispose();
+  }
+
+  /// 日期桶本身按“今天在最前”生成；选周一起始时按星期轮转显示顺序，
+  /// 因此每个日期仍然只出现一次，只是换了排列。
+  List<int> _displayOrder() {
+    if (_order == _WeekOrder.today) {
+      return [for (var index = 0; index < 7; index++) index];
+    }
+    final start = _order == _WeekOrder.monday ? 1 : 7;
+    final offset = (start - DateTime.now().weekday) % 7;
+    return [for (var index = 0; index < 7; index++) (offset + index) % 7];
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final days = buildDashboardDayCounts(entries);
+    final allDays = buildDashboardDayCounts(widget.entries);
+    final days = allDays.length >= 7 ? allDays.take(7).toList() : allDays;
     final total = days.fold<int>(0, (sum, day) => sum + day.count);
+    final order = _displayOrder();
     return Container(
       height: 114,
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
@@ -1928,8 +2021,6 @@ class _DateDistributionCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
             children: [
               Text(
                 '任务日期分布',
@@ -1954,18 +2045,20 @@ class _DateDistributionCard extends StatelessWidget {
           const SizedBox(height: 12),
           Row(
             children: [
-              for (var index = 0; index < days.length; index++)
+              for (final index in order)
                 Expanded(
                   child: InkWell(
                     borderRadius: BorderRadius.circular(9),
-                    onTap: () => onSelect(index),
+                    onTap: () => widget.onSelect(index),
                     child: Column(
                       children: [
                         Text(
                           days[index].label,
                           style: TextStyle(
                             fontSize: 11,
-                            color: index == selectedIndex ? AppColors.teal : AppColors.text3,
+                            color: index == widget.selectedIndex
+                                ? AppColors.teal
+                                : AppColors.text3,
                           ),
                         ),
                         const SizedBox(height: 7),
@@ -1974,13 +2067,15 @@ class _DateDistributionCard extends StatelessWidget {
                           height: 30,
                           alignment: Alignment.center,
                           decoration: BoxDecoration(
-                            color: index == selectedIndex
+                            color: index == widget.selectedIndex
                                 ? AppColors.tealDim
                                 : AppColors.surface2,
                             borderRadius: BorderRadius.circular(9),
-                            border: index == selectedIndex
+                            border: index == widget.selectedIndex
                                 ? Border.all(
-                                    color: AppColors.teal.withValues(alpha: 0.35),
+                                    color: AppColors.teal.withValues(
+                                      alpha: 0.35,
+                                    ),
                                   )
                                 : null,
                           ),
@@ -1989,7 +2084,9 @@ class _DateDistributionCard extends StatelessWidget {
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
-                              color: index == selectedIndex ? AppColors.teal : AppColors.text2,
+                              color: index == widget.selectedIndex
+                                  ? AppColors.teal
+                                  : AppColors.text2,
                             ),
                           ),
                         ),
@@ -2068,12 +2165,12 @@ class _TaskRowTile extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           SizedBox(
-            width: 44,
+            width: 52,
             child: Text(
               entry.timeText,
               style: TextStyle(
-                fontSize: 12,
-                color: AppColors.text3,
+                fontSize: 13.5,
+                color: AppColors.text2,
                 fontFeatures: const [FontFeature.tabularFigures()],
               ),
             ),
@@ -2118,14 +2215,18 @@ class _TaskRowTile extends StatelessWidget {
           _RowIconButton(
             icon: Icons.flash_on_rounded,
             tooltip: I18n.homeQuickRun.tr,
-            color: appliedAction == _QuickAction.run ? AppColors.teal : AppColors.text3,
+            color: appliedAction == _QuickAction.run
+                ? AppColors.teal
+                : AppColors.text3,
             onTap: onRun,
             filled: true,
           ),
           _RowIconButton(
             icon: Icons.schedule_rounded,
             tooltip: I18n.homeQuickWait.tr,
-            color: appliedAction == _QuickAction.wait ? AppColors.blue : AppColors.text3,
+            color: appliedAction == _QuickAction.wait
+                ? AppColors.blue
+                : AppColors.text3,
             onTap: onWait,
             filled: true,
           ),
@@ -2335,10 +2436,7 @@ class _OverviewColumnState extends State<_OverviewColumn> {
     if (!mounted) {
       return;
     }
-    showToast(
-      ok ? '已刷新' : '刷新失败',
-      ok ? '任务目录 $_catalogCount 项' : '无法读取任务目录',
-    );
+    showToast(ok ? '已刷新' : '刷新失败', ok ? '任务目录 $_catalogCount 项' : '无法读取任务目录');
   }
 
   @override
@@ -2409,8 +2507,9 @@ class _OverviewColumnState extends State<_OverviewColumn> {
           : (entries.isEmpty ? null : entries.first.name);
       final canToggle = script != null && script.name.trim().isNotEmpty;
       final nextTaskText = _nextTaskText(entries, runningTaskName);
-      final enabledTaskNames =
-          script == null ? const <String>{} : controller.enabledTaskNamesFor(script);
+      final enabledTaskNames = script == null
+          ? const <String>{}
+          : controller.enabledTaskNamesFor(script);
       var enabledInCatalog = 0;
       for (final tasks in _menu.values) {
         for (final task in tasks) {
@@ -2434,34 +2533,34 @@ class _OverviewColumnState extends State<_OverviewColumn> {
             onOpenConnector: script == null
                 ? null
                 : () => showConnectorDialog(
-                      context,
-                      controller: controller,
-                      scriptService: widget.scriptService,
-                      sourceScript: script.name,
-                    ),
+                    context,
+                    controller: controller,
+                    scriptService: widget.scriptService,
+                    sourceScript: script.name,
+                  ),
             canRename: !isRunning,
             onRename: isRunning ? null : _renameScript,
             onStartStop: canToggle ? () => _toggleScript(script) : null,
             onRunAll: script == null
                 ? null
                 : () => controller.bulkQuickScheduleTasks(
-                      scriptName: script.name,
-                      runNow: true,
-                    ),
+                    scriptName: script.name,
+                    runNow: true,
+                  ),
             onWaitAll: script == null
                 ? null
                 : () => controller.bulkQuickScheduleTasks(
-                      scriptName: script.name,
-                      runNow: false,
-                    ),
+                    scriptName: script.name,
+                    runNow: false,
+                  ),
             onAdjust: adjustTarget == null || script == null
                 ? null
                 : () => showTaskConfigDialog(
-                      context,
-                      controller: controller,
-                      scriptName: script.name,
-                      taskName: adjustTarget,
-                    ),
+                    context,
+                    controller: controller,
+                    scriptName: script.name,
+                    taskName: adjustTarget,
+                  ),
           ),
           const SizedBox(height: 10),
           Expanded(
@@ -2484,20 +2583,17 @@ class _OverviewColumnState extends State<_OverviewColumn> {
                       scriptRunning: isRunning,
                       onToggleEnabled: script == null
                           ? null
-                          : (task, enable) => _toggleTaskEnabled(
-                                script.name,
-                                task,
-                                enable,
-                              ),
+                          : (task, enable) =>
+                                _toggleTaskEnabled(script.name, task, enable),
                       onQuickRun: script == null
                           ? null
                           : (task) async {
-                              final ok =
-                                  await controller.quickScheduleTaskAcrossLink(
-                                scriptName: script.name,
-                                taskName: task,
-                                runNow: true,
-                              );
+                              final ok = await controller
+                                  .quickScheduleTaskAcrossLink(
+                                    scriptName: script.name,
+                                    taskName: task,
+                                    runNow: true,
+                                  );
                               if (ok) {
                                 showToast('立即执行', task.tr);
                               }
@@ -2505,12 +2601,12 @@ class _OverviewColumnState extends State<_OverviewColumn> {
                       onQuickWait: script == null
                           ? null
                           : (task) async {
-                              final ok =
-                                  await controller.quickScheduleTaskAcrossLink(
-                                scriptName: script.name,
-                                taskName: task,
-                                runNow: false,
-                              );
+                              final ok = await controller
+                                  .quickScheduleTaskAcrossLink(
+                                    scriptName: script.name,
+                                    taskName: task,
+                                    runNow: false,
+                                  );
                               if (ok) {
                                 showToast('已延后', task.tr);
                               }
@@ -2665,8 +2761,7 @@ class _CurrentConfigCard extends StatelessWidget {
                         child: Align(
                           alignment: Alignment.centerLeft,
                           child: Tooltip(
-                            message:
-                                canRename ? '点击重命名' : '运行中的配置不可重命名',
+                            message: canRename ? '点击重命名' : '运行中的配置不可重命名',
                             child: InkWell(
                               borderRadius: BorderRadius.circular(7),
                               onTap: canRename ? onRename : null,
@@ -2708,10 +2803,7 @@ class _CurrentConfigCard extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      _ConnectorButton(
-                        linked: linked,
-                        onTap: onOpenConnector,
-                      ),
+                      _ConnectorButton(linked: linked, onTap: onOpenConnector),
                       const SizedBox(width: 4),
                       _BulkIconButton(
                         icon: Icons.bolt_rounded,
@@ -2757,8 +2849,8 @@ class _CurrentConfigCard extends StatelessWidget {
                             color: nextTaskText.isEmpty
                                 ? AppColors.text3
                                 : (hasRunningTask
-                                    ? AppColors.text
-                                    : AppColors.text2),
+                                      ? AppColors.text
+                                      : AppColors.text2),
                           ),
                         ),
                       ),
@@ -2882,7 +2974,10 @@ class _BulkIconButton extends StatelessWidget {
                     color: AppColors.teal,
                   ),
                 )
-              : _DoubleIcon(icon: icon, color: enabled ? AppColors.teal : AppColors.text3),
+              : _DoubleIcon(
+                  icon: icon,
+                  color: enabled ? AppColors.teal : AppColors.text3,
+                ),
         ),
       ),
     );
@@ -2945,11 +3040,7 @@ class _DoubleIcon extends StatelessWidget {
           Positioned(
             left: 0,
             bottom: 0,
-            child: Icon(
-              icon,
-              size: 13,
-              color: color.withValues(alpha: 0.5),
-            ),
+            child: Icon(icon, size: 13, color: color.withValues(alpha: 0.5)),
           ),
           Positioned(
             right: 0,
@@ -2978,8 +3069,8 @@ class _RunButton extends StatelessWidget {
     final foreground = !enabled
         ? AppColors.text3
         : (running
-            ? Colors.white
-            : (AppColors.isDark ? const Color(0xFF04140F) : Colors.white));
+              ? Colors.white
+              : (AppColors.isDark ? const Color(0xFF04140F) : Colors.white));
     return InkWell(
       borderRadius: BorderRadius.circular(8),
       onTap: onTap,
@@ -2990,9 +3081,7 @@ class _RunButton extends StatelessWidget {
         decoration: BoxDecoration(
           color: background,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: enabled ? background : AppColors.border,
-          ),
+          border: Border.all(color: enabled ? background : AppColors.border),
         ),
         child: Text(
           running ? '停止运行' : '立即运行',
@@ -3008,11 +3097,7 @@ class _RunButton extends StatelessWidget {
 }
 
 class _PillButton extends StatelessWidget {
-  const _PillButton({
-    required this.label,
-    required this.primary,
-    this.onTap,
-  });
+  const _PillButton({required this.label, required this.primary, this.onTap});
 
   final String label;
   final bool primary;
@@ -3066,11 +3151,29 @@ class _RightColumn extends StatefulWidget {
 class _RightColumnState extends State<_RightColumn> {
   int _tab = 0;
 
+  /// null = 还没探测完；false = 这套 OAS 没有资源快照接口，隐藏「资产」页签。
+  bool? _currencySupported;
+
   @override
   void initState() {
     super.initState();
     // The statistics controller only loads data while its panel is visible.
     WidgetsBinding.instance.addPostFrameCallback((_) => _syncStatsVisible());
+    _probeCurrency();
+  }
+
+  Future<void> _probeCurrency() async {
+    final result = await ApiClient().getCurrencyHistory(limit: 1);
+    if (!mounted) {
+      return;
+    }
+    final supported = result.isSuccess;
+    setState(() {
+      _currencySupported = supported;
+      if (!supported && _tab == 2) {
+        _tab = 0;
+      }
+    });
   }
 
   @override
@@ -3118,13 +3221,26 @@ class _RightColumnState extends State<_RightColumn> {
               selected: _tab == 1,
               onTap: () => _selectTab(1),
             ),
+            const SizedBox(width: 8),
+            if (_currencySupported != false) ...[
+              _TaskViewChip(
+                label: '资产',
+                selected: _tab == 2,
+                onTap: () => _selectTab(2),
+              ),
+            ],
           ],
         ),
         const SizedBox(height: 10),
         Expanded(
-          child: _tab == 0
-              ? _LogsColumn(scriptName: widget.scriptName)
-              : _StatisticsColumn(Theme.of(context).brightness),
+          child: switch (_tab) {
+            0 => _LogsColumn(scriptName: widget.scriptName),
+            2 =>
+              _currencySupported == false
+                  ? const SizedBox.shrink()
+                  : _CurrencyColumn(Theme.of(context).brightness),
+            _ => _StatisticsColumn(Theme.of(context).brightness),
+          },
         ),
       ],
     );
@@ -3147,6 +3263,24 @@ class _StatisticsColumn extends StatelessWidget {
     // 不用 const：主题切换后需要重新构建，_Panel 才会取到新配色。
     // ignore: prefer_const_constructors
     return _Panel(child: const ScriptStatisticsPanel());
+  }
+}
+
+/// Asset snapshot tab content: in-game resources plus their collection time.
+///
+/// Same brightness trick as [_StatisticsColumn]: the panel reads static
+/// [AppColors] getters, so it has to be rebuilt when the theme flips.
+class _CurrencyColumn extends StatelessWidget {
+  const _CurrencyColumn(this.brightness);
+
+  final Brightness brightness;
+
+  @override
+  Widget build(BuildContext context) {
+    return _Panel(
+      // ignore: prefer_const_constructors
+      child: CurrencySnapshotPanel(key: ValueKey(brightness)),
+    );
   }
 }
 
@@ -3195,16 +3329,16 @@ class _EmptyHint extends StatelessWidget {
 enum _QuickAction { run, wait }
 
 IconData _typeIcon(DashboardTaskType type) => switch (type) {
-      DashboardTaskType.running => Icons.bolt_rounded,
-      DashboardTaskType.pending => Icons.layers_rounded,
-      DashboardTaskType.waiting => Icons.hourglass_bottom_rounded,
-    };
+  DashboardTaskType.running => Icons.bolt_rounded,
+  DashboardTaskType.pending => Icons.layers_rounded,
+  DashboardTaskType.waiting => Icons.hourglass_bottom_rounded,
+};
 
 Color _typeColor(DashboardTaskType type) => switch (type) {
-      DashboardTaskType.running => AppColors.green,
-      DashboardTaskType.pending => AppColors.yellow,
-      DashboardTaskType.waiting => AppColors.text2,
-    };
+  DashboardTaskType.running => AppColors.green,
+  DashboardTaskType.pending => AppColors.yellow,
+  DashboardTaskType.waiting => AppColors.text2,
+};
 
 List<DashboardTaskEntry> _collectTasks(ScriptModel? model) {
   if (model == null) {
@@ -3237,17 +3371,19 @@ List<DashboardTaskEntry> _filterEntriesForDay(
   final now = DateTime.now();
   final today = DateTime(now.year, now.month, now.day);
   final selectedDay = today.add(Duration(days: dayIndex));
-  return entries.where((entry) {
-    final time = entry.time;
-    if (time == null) {
-      return dayIndex == 0;
-    }
-    final day = DateTime(time.year, time.month, time.day);
-    if (dayIndex == 0) {
-      // Today also shows overdue tasks: quick-run sets next_run to yesterday
-      // so the task stays visible instead of disappearing.
-      return !day.isAfter(today);
-    }
-    return day == selectedDay;
-  }).toList(growable: false);
+  return entries
+      .where((entry) {
+        final time = entry.time;
+        if (time == null) {
+          return dayIndex == 0;
+        }
+        final day = DateTime(time.year, time.month, time.day);
+        if (dayIndex == 0) {
+          // Today also shows overdue tasks: quick-run sets next_run to yesterday
+          // so the task stays visible instead of disappearing.
+          return !day.isAfter(today);
+        }
+        return day == selectedDay;
+      })
+      .toList(growable: false);
 }
