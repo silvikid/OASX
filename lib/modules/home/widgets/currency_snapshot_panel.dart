@@ -10,18 +10,9 @@ const _kCurrencyPadding = 12.0;
 const _kCurrencyCardSpacing = 8.0;
 
 /// Every card reserves the same icon slot so labels and amounts stay in one
-/// column even when an individual icon is drawn larger.
-const _kIconSlot = 32.0;
-const _kIconBase = 30.0;
-
-/// Assets whose art is drawn smaller inside the PNG get a visual bump; the
-/// extra size is painted inside the shared slot, so it never shifts layout.
-const Map<String, double> _kIconBoost = {
-  'daruma': 42.0,
-  'daruma_frag': 42.0,
-  'totem_key': 42.0,
-  'ap': 36.0,
-};
+/// column; all icons are drawn at one uniform size.
+const _kIconSlot = 34.0;
+const _kIconBase = 32.0;
 
 /// 默认显示顺序；不在这张表里的资产默认隐藏。
 const List<String> _kDefaultOrder = [
@@ -498,7 +489,6 @@ class _AssetCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final iconAsset = _kCurrencyIconAssets[row.key];
-    final iconSize = _kIconBoost[row.key] ?? _kIconBase;
     final delta = row.delta;
     final hasDelta = delta != null && delta != 0;
     final exact = format.format(row.amount);
@@ -532,10 +522,10 @@ class _AssetCard extends StatelessWidget {
                         ? _FallbackIcon(label: row.label)
                         : OverflowBox(
                             alignment: Alignment.center,
-                            minWidth: iconSize,
-                            maxWidth: iconSize,
-                            minHeight: iconSize,
-                            maxHeight: iconSize,
+                            minWidth: _kIconBase,
+                            maxWidth: _kIconBase,
+                            minHeight: _kIconBase,
+                            maxHeight: _kIconBase,
                             child: Image.asset(
                               iconAsset,
                               fit: BoxFit.contain,
