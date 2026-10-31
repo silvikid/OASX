@@ -3,6 +3,10 @@ class I18n {
   static const String changeTheme = 'Change Theme',
       changeLanguage = 'Change Language',
       projectStatement = 'Project Statement';
+  static const String skin = 'Skin',
+      skinHint = 'Pick one look, applied instantly',
+      skinLight = 'Light',
+      skinDark = 'Dark';
   static const String year = 'Years', month = 'Months', day = 'Days';
   static const String week = 'Weeks', hour = 'Hours', minute = 'Minutes';
   static const String seconds = 'Seconds',

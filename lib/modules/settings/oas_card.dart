@@ -108,6 +108,7 @@ void notifyTest() {
     context: navigatorContext,
     builder: (dialogContext) {
       return AlertDialog(
+        clipBehavior: Clip.antiAlias,
         title: Text(I18n.notifyTest.tr),
         content: const NotifyTest(),
         actions: [

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:chinese_font_library/chinese_font_library.dart';
 import 'package:oasx/config/app_colors.dart';
+import 'package:oasx/config/app_skin.dart';
 
 const List<String> _webChineseFontFallback = <String>[
   'PingFang SC',
@@ -43,8 +44,21 @@ const Map<String, Color> colorSeedMap = {
   'Pink': Colors.pink
 };
 
-ThemeData lightTheme = _buildTheme(Brightness.light);
-ThemeData darkTheme = _buildTheme(Brightness.dark);
+/// 主题按「皮肤 + 明暗」缓存，换皮肤时不用每次重建 [ThemeData]。
+final Map<String, ThemeData> _themeCache = <String, ThemeData>{};
+
+/// 取当前皮肤在指定明暗档下的 [ThemeData]。
+///
+/// 换皮肤后必须重新取一次（`ThemeService` 会触发整树重建），
+/// 因为缓存键里带了皮肤 id。
+ThemeData themeFor(Brightness brightness) {
+  final key = '${AppSkins.active.id}-${brightness.name}';
+  return _themeCache.putIfAbsent(key, () => _buildTheme(brightness));
+}
+
+/// 兼容旧引用：等价于当前皮肤的浅色 / 深色主题。
+ThemeData get lightTheme => themeFor(Brightness.light);
+ThemeData get darkTheme => themeFor(Brightness.dark);
 
 /// Builds the app theme from [AppColors] so every Material component
 /// (dialogs, cards, inputs, menus, tooltips) shares one look.
@@ -54,7 +68,9 @@ ThemeData _buildTheme(Brightness brightness) {
   final text2 = AppColors.text2For(brightness);
   final border = AppColors.borderFor(brightness);
   final surface2 = AppColors.surface2For(brightness);
-  final radius = BorderRadius.circular(10);
+  // 皮肤可以整体加圆角：吉卜力这类柔和风格比默认皮肤圆润两档。
+  final bump = AppSkins.active.radiusBump;
+  final radius = BorderRadius.circular(10 + bump);
 
   final scheme = ColorScheme.fromSeed(
     seedColor: AppColors.seed,
@@ -79,22 +95,25 @@ ThemeData _buildTheme(Brightness brightness) {
     brightness: brightness,
     colorScheme: scheme,
     textTheme: _buildTextTheme(brightness),
-    scaffoldBackgroundColor: AppColors.bgFor(brightness),
+    // 页面底色交给 SkinBackdrop 画（底色 + 光晕）；这里必须透明，
+    // 否则不透明的 Scaffold 会把底层光晕整块盖掉。
+    scaffoldBackgroundColor: Colors.transparent,
     canvasColor: AppColors.panelFor(brightness),
     cardColor: AppColors.cardFor(brightness),
     dividerColor: border,
     shadowColor: Colors.transparent,
     splashFactory: InkSparkle.splashFactory,
     navigationRailTheme: NavigationRailThemeData(
-      backgroundColor: AppColors.bgFor(brightness),
+      backgroundColor: Colors.transparent,
       indicatorColor: AppColors.tealDimFor(brightness),
     ),
     dialogTheme: DialogThemeData(
-      backgroundColor: AppColors.panelFor(brightness),
+      // 玻璃皮肤下面板只有 10% 不透明度，弹窗底必须更实，否则文字会糊。
+      backgroundColor: AppColors.overlayFor(brightness),
       surfaceTintColor: Colors.transparent,
       elevation: 0,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(14 + bump),
         side: BorderSide(color: border),
       ),
       titleTextStyle: TextStyle(
@@ -111,7 +130,7 @@ ThemeData _buildTheme(Brightness brightness) {
       elevation: 0,
       margin: EdgeInsets.zero,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(12 + bump),
         side: BorderSide(color: border),
       ),
     ),
@@ -139,7 +158,7 @@ ThemeData _buildTheme(Brightness brightness) {
       style: FilledButton.styleFrom(
         minimumSize: const Size(0, 34),
         padding: const EdgeInsets.symmetric(horizontal: 16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9 + bump)),
         textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
       ),
     ),
@@ -149,7 +168,7 @@ ThemeData _buildTheme(Brightness brightness) {
         padding: const EdgeInsets.symmetric(horizontal: 16),
         foregroundColor: text2,
         side: BorderSide(color: border),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9 + bump)),
         textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
       ),
     ),
@@ -158,7 +177,7 @@ ThemeData _buildTheme(Brightness brightness) {
         minimumSize: const Size(0, 32),
         padding: const EdgeInsets.symmetric(horizontal: 12),
         foregroundColor: teal,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8 + bump)),
         textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
       ),
     ),
@@ -169,11 +188,11 @@ ThemeData _buildTheme(Brightness brightness) {
       ),
     ),
     popupMenuTheme: PopupMenuThemeData(
-      color: AppColors.panelFor(brightness),
+      color: AppColors.overlayFor(brightness),
       surfaceTintColor: Colors.transparent,
       elevation: 0,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(10 + bump),
         side: BorderSide(color: border),
       ),
       textStyle: TextStyle(fontSize: 13, color: text),
@@ -181,7 +200,7 @@ ThemeData _buildTheme(Brightness brightness) {
     tooltipTheme: TooltipThemeData(
       decoration: BoxDecoration(
         color: surface2,
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(6 + bump),
         border: Border.all(color: border),
       ),
       textStyle: TextStyle(fontSize: 12, color: text),
@@ -191,7 +210,7 @@ ThemeData _buildTheme(Brightness brightness) {
       backgroundColor: AppColors.surface3For(brightness),
       contentTextStyle: TextStyle(fontSize: 13, color: text),
       behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10 + bump)),
     ),
     progressIndicatorTheme: ProgressIndicatorThemeData(color: teal),
     // Material 3 默认用 colorScheme.primary/onPrimary 组合，深色下拇指会接近黑色，
@@ -224,7 +243,7 @@ ThemeData _buildTheme(Brightness brightness) {
     ),
     checkboxTheme: CheckboxThemeData(
       side: BorderSide(color: border, width: 1.4),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4 + bump)),
       fillColor: WidgetStateProperty.resolveWith(
         (states) => states.contains(WidgetState.selected) ? teal : null,
       ),

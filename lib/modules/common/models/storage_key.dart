@@ -23,4 +23,5 @@ enum StorageKey {
   currencyVisibleKeys,
   currencyOrder,
   dashboardWeekOrder,
+  skin,
 }

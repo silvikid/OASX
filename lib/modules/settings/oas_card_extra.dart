@@ -53,6 +53,7 @@ void killServer() {
     Obx(() {
       final killing = isKilling.value;
       return AlertDialog(
+        clipBehavior: Clip.antiAlias,
         title: Text(I18n.areYouSureKill.tr),
         actions: [
           TextButton(

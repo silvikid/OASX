@@ -24,6 +24,7 @@ class _DeployImportDialogState extends State<DeployImportDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
+      clipBehavior: Clip.antiAlias,
       title: Text(I18n.importDeployFile.tr),
       content: _buildDropArea(context),
       actions: [

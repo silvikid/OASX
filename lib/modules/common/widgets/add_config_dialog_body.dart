@@ -44,6 +44,7 @@ class _AddConfigDialogBodyState extends State<AddConfigDialogBody> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
+      clipBehavior: Clip.antiAlias,
       title: Text(I18n.configAdd.tr),
       content: _dialogContent(context),
       actions: [

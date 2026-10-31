@@ -153,6 +153,7 @@ class DateTimePickerBaseState extends State<DateTimePickerBase> {
     final result = await showDialog<String>(
       context: context,
       builder: (dialogContext) => AlertDialog(
+        clipBehavior: Clip.antiAlias,
         title: const Text('分项修改时间'),
         content: SizedBox(
           width: labels.length > 4 ? 420 : 320,

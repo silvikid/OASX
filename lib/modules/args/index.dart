@@ -234,7 +234,9 @@ class ArgsDraftBar extends StatelessWidget {
       final pendingCount = dirtyCount * scopeCount;
       return DecoratedBox(
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surfaceContainerHigh,
+          // 与弹窗本体同色：原来是 surfaceContainerHigh，和上下两块拼在一起
+          // 像是"两个窗口粘起来"，分层交给上面那条分隔线。
+          color: Theme.of(context).colorScheme.surface,
           border: Border(
             top: BorderSide(
               color: Theme.of(context).colorScheme.outlineVariant,

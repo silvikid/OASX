@@ -102,7 +102,9 @@ class _TaskConfigDialogState extends State<_TaskConfigDialog> {
     return Theme(
       data: _dialogTheme(),
       child: Dialog(
-        backgroundColor: AppColors.panel,
+        // Dialog 默认 Clip.none：底部草稿栏的底色会盖住圆角，底部变成直角。
+        clipBehavior: Clip.antiAlias,
+        backgroundColor: AppColors.overlay,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(14),

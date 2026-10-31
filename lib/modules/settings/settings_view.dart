@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:oasx/config/app_colors.dart';
+import 'package:oasx/config/app_skin.dart';
 import 'package:flutter/rendering.dart';
 import 'package:get/get.dart';
 
@@ -83,7 +84,10 @@ class _SettingsViewState extends State<SettingsView> {
     // 换 key 让设置页内容整棵重挂载，直接以最终配色首帧渲染。
     final body = SafeArea(
       child: LayoutBuilder(
-        key: ValueKey<Brightness>(Theme.of(context).brightness),
+        // key 同时带上皮肤 id：换皮肤也要整棵重挂载，否则缓存的配色不会更新。
+        key: ValueKey<String>(
+          '${Theme.of(context).brightness}-${AppSkins.active.id}',
+        ),
         builder: (context, constraints) {
           final isWide = constraints.maxWidth >= _wideLayoutBreakpoint;
           final settingList = _buildSettingList(keyboardInset);

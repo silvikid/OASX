@@ -24,6 +24,7 @@ class AppUpdateDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
+      clipBehavior: Clip.antiAlias,
       title: Text(I18n.findNewVersion.tr),
       content: _buildContent().constrained(width: 320, height: 360),
       actions: _buildActions(),

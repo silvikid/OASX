@@ -80,6 +80,7 @@ class ConfigActions {
       context: navigatorContext,
       builder: (dialogContext) {
         return AlertDialog(
+          clipBehavior: Clip.antiAlias,
           title: Text(I18n.rename.tr),
           content: SizedBox(
             width: 320,
@@ -132,6 +133,7 @@ class ConfigActions {
       context: navigatorContext,
       builder: (dialogContext) {
         return AlertDialog(
+          clipBehavior: Clip.antiAlias,
           title: Text(I18n.delete.tr),
           content: SizedBox(
             width: 320,

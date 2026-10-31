@@ -4,6 +4,7 @@ import 'package:styled_widget/styled_widget.dart';
 
 import 'package:oasx/config/global.dart';
 import 'package:oasx/modules/settings/controllers/settings_controller.dart';
+import 'package:oasx/modules/common/widgets/skin_picker_dialog.dart';
 import 'package:oasx/modules/settings/widgets/setting_card.dart';
 import 'package:oasx/modules/settings/widgets/setting_item.dart';
 import 'package:oasx/service/autostart_service.dart';
@@ -24,6 +25,10 @@ class SystemSettingsCard extends StatelessWidget {
     return SettingCard(
       title: I18n.systemSetting.tr,
       items: [
+        SettingItem(
+          left: Text(I18n.skin.tr),
+          right: const SkinEntryButton(),
+        ),
         SettingItem(
           left: Text(I18n.changeTheme.tr),
           right: const ThemeSwitcher(),
@@ -122,6 +127,28 @@ class LanguageToggle extends StatelessWidget {
           Text(I18n.enUs.tr).paddingSymmetric(horizontal: 10),
         ],
       ).constrained(maxHeight: 40);
+    });
+  }
+}
+
+/// 设置页的皮肤入口：显示当前皮肤名，点开与顶栏同一个弹窗。
+class SkinEntryButton extends StatelessWidget {
+  const SkinEntryButton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final themeService = Get.find<ThemeService>();
+    return Obx(() {
+      final skin = themeService.skin;
+      return OutlinedButton.icon(
+        onPressed: () => showSkinPickerDialog(context),
+        icon: const Icon(Icons.palette_rounded, size: 15),
+        label: Text(skin.nameZh),
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size(0, 32),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+        ),
+      );
     });
   }
 }

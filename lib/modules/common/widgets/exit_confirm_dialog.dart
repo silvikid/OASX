@@ -61,6 +61,7 @@ class _ExitConfirmDialogState extends State<ExitConfirmDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
+      clipBehavior: Clip.antiAlias,
       title: Text(I18n.exitOasx.tr),
       content: SizedBox(
         width: 440,

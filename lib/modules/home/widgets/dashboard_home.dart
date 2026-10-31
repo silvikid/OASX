@@ -4,18 +4,20 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:oasx/api/api_client.dart';
 import 'package:oasx/config/app_colors.dart';
+import 'package:oasx/config/app_skin.dart';
 import 'package:oasx/modules/settings/controllers/settings_controller.dart';
 import 'package:oasx/modules/home/config_actions.dart';
 import 'package:oasx/modules/home/controllers/dashboard_controller.dart';
 import 'package:oasx/modules/home/models/config_model.dart';
 import 'package:oasx/modules/home/models/dashboard_task_helpers.dart';
 import 'package:oasx/modules/home/models/script_statistics_models.dart';
+import 'package:oasx/modules/common/widgets/skin_picker_dialog.dart';
+import 'package:oasx/modules/common/widgets/soft_surface.dart';
 import 'package:oasx/modules/home/widgets/currency_snapshot_panel.dart';
 import 'package:oasx/modules/home/widgets/log_center_panel.dart';
 import 'package:oasx/modules/home/widgets/statistics_panel.dart';
 import 'package:oasx/modules/home/widgets/task_config_dialog.dart';
 import 'package:oasx/service/script_service.dart';
-import 'package:oasx/service/theme_service.dart';
 import 'package:oasx/translation/i18n_content.dart';
 import 'package:oasx/utils/app_toast.dart';
 import 'package:oasx/utils/logger.dart';
@@ -23,6 +25,11 @@ import 'package:oasx/utils/logger.dart';
 // ---------------------------------------------------------------------------
 // Palette: light (day) and dark (night) variants selected by the app theme.
 // ---------------------------------------------------------------------------
+
+/// 仪表盘列与列、列与窗口边缘的统一间距。
+///
+/// 所有皮肤共用同一套间距（不随皮肤变化），否则换一次皮肤整页布局会跳一下。
+const double _kDashboardGap = 12;
 /// 从配置卡片的链条按钮打开「全部配置」面板：只做一件事——默认勾上当前配置。
 ///
 /// 关闭时若只勾了一个配置，等同于「不连接」，会自动断开（见 [showAllConfigsDialog]）。
@@ -210,6 +217,7 @@ class _AllConfigsDialogState extends State<_AllConfigsDialog> {
       final panelHeight = (size.height - 240).clamp(200.0, 380.0);
 
       return AlertDialog(
+        clipBehavior: Clip.antiAlias,
         title: Row(
           children: [
             const Text('全部配置'),
@@ -606,9 +614,14 @@ class _DashboardHomeState extends State<DashboardHome> {
                 ),
                 Expanded(
                   child: KeyedSubtree(
-                    key: ValueKey<Brightness>(brightness),
+                    key: ValueKey<String>('$brightness-${AppSkins.active.id}'),
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+                      padding: const EdgeInsets.fromLTRB(
+                        _kDashboardGap,
+                        8,
+                        _kDashboardGap,
+                        _kDashboardGap,
+                      ),
                       child: compact
                           ? _buildCompactBody(script, scriptName)
                           : _buildWideBody(script, scriptName),
@@ -629,10 +642,10 @@ class _DashboardHomeState extends State<DashboardHome> {
       children: [
         // 左：当前配置卡片 + 总览
         Expanded(flex: 10, child: _buildOverviewColumn(script)),
-        const SizedBox(width: 10),
+        const SizedBox(width: _kDashboardGap),
         // 中：任务日期分布 + 任务列表
         Expanded(flex: 11, child: _buildTasksColumn(script)),
-        const SizedBox(width: 10),
+        const SizedBox(width: _kDashboardGap),
         // 右：日志 / 统计（点击切换）
         Expanded(flex: 10, child: _RightColumn(scriptName: scriptName)),
       ],
@@ -772,16 +785,10 @@ class _DashboardHeader extends StatelessWidget {
             ),
             const SizedBox(width: 8),
             _SquareButton(
-              tooltip: AppColors.isDark ? '切换到白天' : '切换到黑夜',
-              onTap: () {
-                if (Get.isRegistered<ThemeService>()) {
-                  Get.find<ThemeService>().switchTheme();
-                }
-              },
+              tooltip: I18n.skin.tr,
+              onTap: () => showSkinPickerDialog(context),
               child: Icon(
-                AppColors.isDark
-                    ? Icons.light_mode_rounded
-                    : Icons.dark_mode_rounded,
+                Icons.palette_rounded,
                 size: 15,
                 color: AppColors.text2,
               ),
@@ -1035,26 +1042,26 @@ class _AccountTab extends StatelessWidget {
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
-        child: Container(
+        child: SoftSurface(
+          radius: 10 + AppSkins.active.radiusBump,
+          depth: AppColors.softDepth * 0.6,
+          // 连接中的配置即使没被选中，也给一层淡青底 + 青色描边。
+          color: active
+              ? AppColors.tealDim
+              : (linked
+                    ? AppColors.tealDim.withValues(alpha: 0.55)
+                    : AppColors.surface2),
+          border: BorderSide(
+            color: active
+                ? AppColors.teal.withValues(alpha: 0.55)
+                : (linked
+                      ? AppColors.teal.withValues(alpha: 0.45)
+                      : AppColors.border),
+            width: active || linked ? 1.5 : 1,
+          ),
+          child: Container(
           height: 34,
           padding: const EdgeInsets.symmetric(horizontal: 9),
-          decoration: BoxDecoration(
-            // 连接中的配置即使没被选中，也给一层淡青底 + 青色描边。
-            color: active
-                ? AppColors.tealDim
-                : (linked
-                      ? AppColors.tealDim.withValues(alpha: 0.55)
-                      : AppColors.surface2),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: active
-                  ? AppColors.teal.withValues(alpha: 0.55)
-                  : (linked
-                        ? AppColors.teal.withValues(alpha: 0.45)
-                        : AppColors.border),
-              width: active || linked ? 1.5 : 1,
-            ),
-          ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -1113,6 +1120,7 @@ class _AccountTab extends StatelessWidget {
                 ),
               ],
             ],
+          ),
           ),
         ),
       ),
@@ -1191,15 +1199,14 @@ class _SquareButton extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(7),
         onTap: _dismissingTooltipTap(onTap),
-        child: Container(
+        child: SizedBox(
           width: 34,
           height: 34,
-          decoration: BoxDecoration(
+          child: SoftSurface(
+            radius: 9 + AppSkins.active.radiusBump,
             color: AppColors.surface3,
-            borderRadius: BorderRadius.circular(9),
-            border: Border.all(color: AppColors.border),
+            child: Center(child: child),
           ),
-          child: Center(child: child),
         ),
       ),
     );
@@ -1535,25 +1542,21 @@ class _TaskViewChip extends StatelessWidget {
     return InkWell(
       borderRadius: BorderRadius.circular(8),
       onTap: onTap,
-      child: Container(
-        height: 28,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: selected ? AppColors.tealDim : AppColors.surface2,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: selected
-                ? AppColors.teal.withValues(alpha: 0.45)
-                : AppColors.border,
-          ),
-        ),
-        child: Text(
+      child: SoftSurface(
+        radius: 8 + AppSkins.active.radiusBump,
+        color: selected ? AppColors.tealDim : AppColors.surface2,
+        depth: AppColors.softDepth * 0.6,
+        child: Container(
+          height: 28,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          alignment: Alignment.center,
+          child: Text(
           label,
           style: TextStyle(
             fontSize: 12.5,
             fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
             color: selected ? AppColors.teal : AppColors.text2,
+          ),
           ),
         ),
       ),
@@ -2009,14 +2012,14 @@ class _DateDistributionCardState extends State<_DateDistributionCard> {
     final days = allDays.length >= 7 ? allDays.take(7).toList() : allDays;
     final total = days.fold<int>(0, (sum, day) => sum + day.count);
     final order = _displayOrder();
-    return Container(
+    return SoftSurface(
+      radius: 14 + AppSkins.active.radiusBump,
+      color: AppColors.card,
+      gradient: AppColors.sheenFor(AppColors.card),
+      depth: AppColors.softDepth * 0.6,
+      child: Container(
       height: 114,
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -2097,6 +2100,7 @@ class _DateDistributionCardState extends State<_DateDistributionCard> {
             ],
           ),
         ],
+        ),
       ),
     );
   }
@@ -2654,13 +2658,11 @@ class _LogsColumn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(14),
-      child: scriptName.isEmpty
-          // ignore: prefer_const_constructors
-          ? _Panel(child: const _EmptyHint(label: '请选择脚本'))
-          : LogCenterPanel(scriptName: scriptName),
-    );
+    // 不再套 ClipRRect：新拟物面板的阴影是画在自身 bounds 之外的，裁剪会把光影切掉；
+    // 圆角由 _Panel 内部的 ClipRRect 负责。
+    return scriptName.isEmpty
+        ? const _Panel(child: _EmptyHint(label: '请选择脚本'))
+        : LogCenterPanel(scriptName: scriptName);
   }
 }
 
@@ -2736,15 +2738,14 @@ class _CurrentConfigCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return SizedBox(
       height: 152,
-      decoration: BoxDecoration(
+      child: SoftSurface(
+        radius: 14 + AppSkins.active.radiusBump,
         color: AppColors.card,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
+        gradient: AppColors.sheenFor(AppColors.card),
+        depth: AppColors.softDepth * 0.6,
+        child: Column(
         children: [
           Expanded(
             child: Padding(
@@ -2888,6 +2889,7 @@ class _CurrentConfigCard extends StatelessWidget {
             ),
           ),
         ],
+        ),
       ),
     );
   }
@@ -3279,7 +3281,9 @@ class _CurrencyColumn extends StatelessWidget {
   Widget build(BuildContext context) {
     return _Panel(
       // ignore: prefer_const_constructors
-      child: CurrencySnapshotPanel(key: ValueKey(brightness)),
+      child: CurrencySnapshotPanel(
+        key: ValueKey<String>('$brightness-${AppSkins.active.id}'),
+      ),
     );
   }
 }
@@ -3294,13 +3298,11 @@ class _Panel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.panel,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
-      ),
-      clipBehavior: Clip.antiAlias,
+    // 新拟物皮肤下这块是"凸起"的表面；平面皮肤下等价于圆角 + 描边，
+    // 再多给一层从上到下的受光渐变，让整窗不至于是一块死色。
+    return SoftSurface(
+      radius: 14 + AppSkins.active.radiusBump,
+      gradient: AppColors.sheenFor(AppColors.panel),
       child: child,
     );
   }

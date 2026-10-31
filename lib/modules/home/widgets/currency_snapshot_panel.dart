@@ -3,6 +3,8 @@ import 'package:get_storage/get_storage.dart';
 import 'package:intl/intl.dart';
 import 'package:oasx/api/api_client.dart';
 import 'package:oasx/config/app_colors.dart';
+import 'package:oasx/config/app_skin.dart';
+import 'package:oasx/modules/common/widgets/soft_surface.dart';
 import 'package:oasx/modules/common/models/storage_key.dart';
 import 'package:oasx/modules/home/models/currency_snapshot_models.dart';
 
@@ -370,14 +372,13 @@ class _DateDropdown extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return SoftSurface(
+      radius: 8 + AppSkins.active.radiusBump,
+      color: AppColors.surface2,
+      depth: AppColors.softDepth * 0.6,
+      child: Container(
       height: 30,
       padding: const EdgeInsets.symmetric(horizontal: 8),
-      decoration: BoxDecoration(
-        color: AppColors.surface2,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.border),
-      ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
@@ -426,6 +427,7 @@ class _DateDropdown extends StatelessWidget {
             ),
           ),
         ],
+        ),
       ),
     );
   }
@@ -500,13 +502,12 @@ class _AssetCard extends StatelessWidget {
     return Tooltip(
       message: tooltip,
       waitDuration: const Duration(milliseconds: 350),
-      child: Container(
+      child: SoftSurface(
+        radius: 10 + AppSkins.active.radiusBump,
+        color: AppColors.surface2,
+        depth: AppColors.softDepth * 0.6,
+        child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-        decoration: BoxDecoration(
-          color: AppColors.surface2,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: AppColors.border),
-        ),
         // 图标上下居中；右侧涨跌贴顶；中间的文案块自己居中
         child: IntrinsicHeight(
           child: Row(
@@ -582,6 +583,7 @@ class _AssetCard extends StatelessWidget {
             ],
           ),
         ),
+        ),
       ),
     );
   }
@@ -649,6 +651,7 @@ class _VisibilityDialogState extends State<_VisibilityDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
+      clipBehavior: Clip.antiAlias,
       title: Text(
         '显示与排序',
         style: TextStyle(fontSize: 15, color: AppColors.text),

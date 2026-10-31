@@ -46,6 +46,7 @@ class _TaskJsonImportDialogState extends State<TaskJsonImportDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
+      clipBehavior: Clip.antiAlias,
       title: Text(I18n.taskJsonImport.tr),
       content: SizedBox(
         width: 320,
