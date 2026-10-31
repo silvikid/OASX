@@ -98,7 +98,10 @@ ThemeData _buildTheme(Brightness brightness) {
     // 页面底色交给 SkinBackdrop 画（底色 + 光晕）；这里必须透明，
     // 否则不透明的 Scaffold 会把底层光晕整块盖掉。
     scaffoldBackgroundColor: Colors.transparent,
-    canvasColor: AppColors.panelFor(brightness),
+    // canvasColor 决定 DropdownButton / 弹出层的底色。
+    // 玻璃皮肤的面板只有 10% 白，拿它做下拉菜单底会透出背后的列表，读不清；
+    // 这里改用 overlay（玻璃是 98% 不透明的深色），其它皮肤仍等于 panel。
+    canvasColor: AppColors.overlayFor(brightness),
     cardColor: AppColors.cardFor(brightness),
     dividerColor: border,
     shadowColor: Colors.transparent,

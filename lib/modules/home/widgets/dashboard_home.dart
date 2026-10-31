@@ -1488,20 +1488,27 @@ class _PanelToolbar extends StatelessWidget {
           ),
           if (_hasSearch) ...[
             const SizedBox(height: 8),
-            Container(
+            SizedBox(
               height: 32,
-              decoration: BoxDecoration(
+              child: SoftSurface(
+                radius: 8 + AppSkins.active.radiusBump,
                 color: AppColors.surface2,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.border),
-              ),
-              child: TextField(
+                inset: true,
+                depth: AppColors.softDepth * 0.6,
+                child: TextField(
                 controller: searchController,
                 style: TextStyle(fontSize: 12.5, color: AppColors.text),
                 textAlignVertical: TextAlignVertical.center,
                 decoration: InputDecoration(
                   isDense: true,
+                  // 主题里给输入框配了圆角描边；这里四边都不要，
+                  // 否则会在外面这层圆角里再画一个圆角，看起来是"两个圆角"。
                   border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  disabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  errorBorder: InputBorder.none,
+                  focusedErrorBorder: InputBorder.none,
                   filled: false,
                   contentPadding: EdgeInsets.zero,
                   prefixIcon: Icon(
@@ -1517,6 +1524,7 @@ class _PanelToolbar extends StatelessWidget {
                   hintStyle: TextStyle(fontSize: 12.5, color: AppColors.text3),
                 ),
                 onSubmitted: (_) => onSearch?.call(),
+              ),
               ),
             ),
           ],

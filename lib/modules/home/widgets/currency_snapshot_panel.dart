@@ -1,3 +1,5 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
 import 'package:get_storage/get_storage.dart';
 import 'package:intl/intl.dart';
@@ -198,6 +200,35 @@ class _CurrencySnapshotPanelState extends State<CurrencySnapshotPanel> {
     await _storage.write(StorageKey.currencyOrder.name, result.order);
   }
 
+  String _labelFor(CurrencyRecord record) {
+    final time = record.collectedAt;
+    return time == null
+        ? (record.collectedAtText ?? '--')
+        : _dateFormat.format(time);
+  }
+
+  /// 打开起止日期弹层：快捷区间 + 迷你日历两步选择。
+  Future<void> _openDateRangePicker(List<CurrencyRecord> records) async {
+    final result = await showGeneralDialog<_RangeSelection>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: '选择起止日期',
+      barrierColor: Colors.black38,
+      pageBuilder: (context, _, __) => _DateRangePopover(
+        records: records,
+        startIndex: _startIndex,
+        endIndex: _endIndex,
+      ),
+    );
+    if (!mounted || result == null) {
+      return;
+    }
+    setState(() {
+      _startIndex = result.startIndex;
+      _endIndex = result.endIndex;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final history = _history;
@@ -238,12 +269,10 @@ class _CurrencySnapshotPanelState extends State<CurrencySnapshotPanel> {
           child: Row(
             children: [
               Expanded(
-                child: _DateDropdown(
+                child: _DatePill(
                   caption: '起',
-                  records: records,
-                  value: startIndex,
-                  format: _dateFormat,
-                  onSelect: (index) => setState(() => _startIndex = index),
+                  label: _labelFor(records[startIndex]),
+                  onTap: () => _openDateRangePicker(records),
                 ),
               ),
               Padding(
@@ -255,12 +284,10 @@ class _CurrencySnapshotPanelState extends State<CurrencySnapshotPanel> {
                 ),
               ),
               Expanded(
-                child: _DateDropdown(
+                child: _DatePill(
                   caption: '止',
-                  records: records,
-                  value: endIndex,
-                  format: _dateFormat,
-                  onSelect: (index) => setState(() => _endIndex = index),
+                  label: _labelFor(records[endIndex]),
+                  onTap: () => _openDateRangePicker(records),
                 ),
               ),
               const SizedBox(width: 6),
@@ -355,20 +382,24 @@ class _AssetRow {
   final int? delta;
 }
 
-class _DateDropdown extends StatelessWidget {
-  const _DateDropdown({
+class _RangeSelection {
+  const _RangeSelection(this.startIndex, this.endIndex);
+
+  final int startIndex;
+  final int endIndex;
+}
+
+/// 起止日期胶囊：点击打开选择弹层。
+class _DatePill extends StatelessWidget {
+  const _DatePill({
     required this.caption,
-    required this.records,
-    required this.value,
-    required this.format,
-    required this.onSelect,
+    required this.label,
+    required this.onTap,
   });
 
   final String caption;
-  final List<CurrencyRecord> records;
-  final int value;
-  final DateFormat format;
-  final ValueChanged<int> onSelect;
+  final String label;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -376,67 +407,503 @@ class _DateDropdown extends StatelessWidget {
       radius: 8 + AppSkins.active.radiusBump,
       color: AppColors.surface2,
       depth: AppColors.softDepth * 0.6,
-      child: Container(
-      height: 30,
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Text(
-            caption,
-            // 与下拉文字同样的字号和行高，保证两者视觉处于同一水平线
-            style: TextStyle(fontSize: 12, height: 1.2, color: AppColors.text3),
-          ),
-          const SizedBox(width: 5),
-          Expanded(
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<int>(
-                value: value,
-                isDense: true,
-                isExpanded: true,
-                alignment: Alignment.centerLeft,
-                borderRadius: BorderRadius.circular(9),
-                icon: Icon(
-                  Icons.expand_more_rounded,
-                  size: 15,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8 + AppSkins.active.radiusBump),
+        onTap: onTap,
+        child: SizedBox(
+          height: 30,
+          child: Row(
+            children: [
+              const SizedBox(width: 8),
+              Text(
+                caption,
+                style: TextStyle(
+                  fontSize: 12,
+                  height: 1.2,
                   color: AppColors.text3,
                 ),
-                items: [
-                  for (var index = 0; index < records.length; index++)
-                    DropdownMenuItem<int>(
-                      value: index,
-                      child: Text(
-                        _labelFor(records[index]),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 12,
-                          height: 1.2,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.text,
-                        ),
-                      ),
-                    ),
-                ],
-                onChanged: (index) {
-                  if (index != null) {
-                    onSelect(index);
-                  }
-                },
               ),
-            ),
+              const SizedBox(width: 5),
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12,
+                    height: 1.2,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.text,
+                  ),
+                ),
+              ),
+              Icon(
+                Icons.expand_more_rounded,
+                size: 15,
+                color: AppColors.text3,
+              ),
+              const SizedBox(width: 6),
+            ],
           ),
-        ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 起止日期弹层：上排快捷区间，下面迷你日历两步选择。
+///
+/// 点第一天定起点、点第二天定终点后自动应用并关闭；无采集记录的日子灰掉
+/// 不可选——起止必须是"有快照的两天"，这条规则在日历上是看得见的。
+class _DateRangePopover extends StatefulWidget {
+  const _DateRangePopover({
+    required this.records,
+    required this.startIndex,
+    required this.endIndex,
+  });
+
+  final List<CurrencyRecord> records;
+  final int startIndex;
+  final int endIndex;
+
+  @override
+  State<_DateRangePopover> createState() => _DateRangePopoverState();
+}
+
+class _DateRangePopoverState extends State<_DateRangePopover> {
+  late DateTime _month;
+  DateTime? _first;
+  DateTime? _second;
+  late final Set<String> _availableDays;
+
+  /// true 时显示"年 + 12 个月"的跳转面板，点月份直接翻过去。
+  bool _pickingMonth = false;
+
+  /// 月份跳转面板正在浏览的年份。
+  int _yearNav = DateTime.now().year;
+
+  @override
+  void initState() {
+    super.initState();
+    final endDate = _dateOf(widget.records[widget.endIndex.clamp(
+      0,
+      widget.records.length - 1,
+    )]);
+    _month = DateTime(endDate.year, endDate.month, 1);
+    _first = _dateOf(widget.records[widget.startIndex.clamp(
+      0,
+      widget.records.length - 1,
+    )]);
+    _second = _dateOf(widget.records[widget.endIndex.clamp(
+      0,
+      widget.records.length - 1,
+    )]);
+    _availableDays = <String>{
+      for (final record in widget.records)
+        if (record.collectedAt != null) _dayKey(record.collectedAt!),
+    };
+  }
+
+  static DateTime _dateOf(CurrencyRecord record) {
+    final time = record.collectedAt;
+    if (time != null) {
+      return DateTime(time.year, time.month, time.day);
+    }
+    final parsed = DateTime.tryParse(record.collectedAtText ?? '');
+    return parsed == null ? DateTime.now() : DateTime(parsed.year, parsed.month, parsed.day);
+  }
+
+  static String _dayKey(DateTime day) =>
+      '${day.year}-${day.month.toString().padLeft(2, '0')}-'
+      '${day.day.toString().padLeft(2, '0')}';
+
+  String _label(DateTime day) =>
+      '${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}';
+
+  /// 当天有多次采集时：起点取最早一次，终点取最晚一次。
+  int _indexFor(DateTime day, {required bool oldest}) {
+    var found = -1;
+    for (var index = 0; index < widget.records.length; index++) {
+      final time = widget.records[index].collectedAt;
+      if (time == null) {
+        continue;
+      }
+      if (time.year == day.year && time.month == day.month && time.day == day.day) {
+        found = index;
+        if (!oldest) {
+          break;
+        }
+      }
+    }
+    return found < 0 ? 0 : found;
+  }
+
+  void _apply(int startIndex, int endIndex) {
+    Navigator.of(context).pop(_RangeSelection(startIndex, endIndex));
+  }
+
+  void _tapDay(DateTime day) {
+    if (_first == null || (_first != null && _second != null)) {
+      setState(() {
+        _first = day;
+        _second = null;
+      });
+      return;
+    }
+    var a = _first!;
+    var b = day;
+    if (b.isBefore(a)) {
+      final tmp = a;
+      a = b;
+      b = tmp;
+    }
+    _apply(_indexFor(a, oldest: true), _indexFor(b, oldest: false));
+  }
+
+  void _applyQuick(int days) {
+    final endDate = _dateOf(widget.records[0]);
+    final cutoff = DateTime(endDate.year, endDate.month, endDate.day - days + 1);
+    var start = -1;
+    for (var index = widget.records.length - 1; index >= 0; index--) {
+      final time = widget.records[index].collectedAt;
+      if (time != null &&
+          !DateTime(time.year, time.month, time.day).isBefore(cutoff)) {
+        start = index;
+        break;
+      }
+    }
+    _apply(start < 0 ? widget.records.length - 1 : start, 0);
+  }
+
+  void _applyAll() => _apply(widget.records.length - 1, 0);
+
+  @override
+  Widget build(BuildContext context) {
+    final radius = 12 + AppSkins.active.radiusBump;
+    // 内容里有一排 Expanded 的星期格，会把弹层撑到整屏宽；
+    // 这里给它一个固定宽度，日历格自动均分。
+    final width = (MediaQuery.sizeOf(context).width - 48).clamp(280.0, 340.0);
+    final content = SizedBox(width: width, child: _buildContent());
+    if (!AppColors.isGlassMaterial) {
+      return Dialog(
+        backgroundColor: AppColors.overlay,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(radius),
+          side: BorderSide(color: AppColors.border),
+        ),
+        child: content,
+      );
+    }
+    // 玻璃：这里面积大、位置固定，是少数值得上真 BackdropFilter 的地方。
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(radius)),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(radius),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+          child: Container(
+            decoration: BoxDecoration(
+              color: AppColors.panel,
+              borderRadius: BorderRadius.circular(radius),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: content,
+          ),
         ),
       ),
     );
   }
 
-  String _labelFor(CurrencyRecord record) {
-    final time = record.collectedAt;
-    return time == null
-        ? (record.collectedAtText ?? '--')
-        : format.format(time);
+  /// 有记录的月份集合（"yyyy-MM"），用于月份跳转面板里的点点标记。
+  Set<String> get _monthsWithRecords => <String>{
+    for (final key in _availableDays) key.substring(0, 7),
+  };
+
+  Widget _buildContent() {
+    final monthLabel =
+        '${_month.year}-${_month.month.toString().padLeft(2, '0')}';
+    final first = DateTime(_month.year, _month.month, 1);
+    final lead = (first.weekday + 6) % 7; // 周一打头
+    final dayCount = DateTime(_month.year, _month.month + 1, 0).day;
+    const weekdays = <String>['一', '二', '三', '四', '五', '六', '日'];
+
+    return Padding(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '选择起止日期',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.text,
+                  ),
+                ),
+              ),
+              IconButton(
+                onPressed: () => Navigator.of(context).pop(),
+                icon: const Icon(Icons.close_rounded, size: 16),
+                visualDensity: VisualDensity.compact,
+              ),
+            ],
+          ),
+          Row(
+            children: [
+              for (final (label, days) in <(String, int)>[
+                ('最近 7 天', 7),
+                ('最近 30 天', 30),
+                ('全部', 0),
+              ]) ...[
+                Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: ActionChip(
+                    label: Text(label, style: const TextStyle(fontSize: 11.5)),
+                    visualDensity: VisualDensity.compact,
+                    side: BorderSide(color: AppColors.border),
+                    backgroundColor: AppColors.surface2,
+                    onPressed: () =>
+                        days == 0 ? _applyAll() : _applyQuick(days),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (_pickingMonth) ...[
+            _buildMonthPicker(),
+          ] else ...[
+          Row(
+            children: [
+              IconButton(
+                onPressed: () =>
+                    setState(() => _month = DateTime(_month.year, _month.month - 1, 1)),
+                icon: const Icon(Icons.chevron_left_rounded, size: 18),
+                visualDensity: VisualDensity.compact,
+              ),
+              Expanded(
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(6),
+                  onTap: () => setState(() {
+                    _yearNav = _month.year;
+                    _pickingMonth = true;
+                  }),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          monthLabel,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.text,
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                          ),
+                        ),
+                        const SizedBox(width: 3),
+                        Icon(
+                          Icons.keyboard_arrow_down_rounded,
+                          size: 14,
+                          color: AppColors.text3,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              IconButton(
+                onPressed: () =>
+                    setState(() => _month = DateTime(_month.year, _month.month + 1, 1)),
+                icon: const Icon(Icons.chevron_right_rounded, size: 18),
+                visualDensity: VisualDensity.compact,
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              for (final weekday in weekdays)
+                Expanded(
+                  child: Center(
+                    child: Text(
+                      weekday,
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        color: AppColors.text3,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 2),
+          for (var week = 0; week < 6; week++)
+            Row(
+              children: [
+                for (var cell = 0; cell < 7; cell++)
+                  Expanded(child: _buildDayCell(lead, dayCount, week, cell)),
+              ],
+            ),
+          ],
+          const SizedBox(height: 8),
+          Text(
+            _hint(),
+            style: TextStyle(fontSize: 11, color: AppColors.text3),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// "年 + 12 个月"跳转面板：点年月标签进入，点某个月直接翻过去。
+  Widget _buildMonthPicker() {
+    final withRecords = _monthsWithRecords;
+    return Column(
+      children: [
+        Row(
+          children: [
+            IconButton(
+              onPressed: () => setState(() => _yearNav = _yearNav - 1),
+              icon: const Icon(Icons.chevron_left_rounded, size: 18),
+              visualDensity: VisualDensity.compact,
+            ),
+            Expanded(
+              child: Center(
+                child: Text(
+                  '$_yearNav 年',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.text,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+              ),
+            ),
+            IconButton(
+              onPressed: () => setState(() => _yearNav = _yearNav + 1),
+              icon: const Icon(Icons.chevron_right_rounded, size: 18),
+              visualDensity: VisualDensity.compact,
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        for (var row = 0; row < 3; row++)
+          Row(
+            children: [
+              for (var col = 0; col < 4; col++)
+                Expanded(child: _buildMonthCell(row * 4 + col + 1, withRecords)),
+            ],
+          ),
+      ],
+    );
+  }
+
+  Widget _buildMonthCell(int month, Set<String> withRecords) {
+    final monthKey =
+        '$_yearNav-${month.toString().padLeft(2, '0')}';
+    final hasRecords = withRecords.contains(monthKey);
+    final isCurrent =
+        _month.year == _yearNav && _month.month == month;
+    return Padding(
+      padding: const EdgeInsets.all(2),
+      child: SizedBox(
+        height: 34,
+        child: Material(
+          color: isCurrent ? AppColors.tealDim : Colors.transparent,
+          borderRadius: BorderRadius.circular(6),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(6),
+            onTap: () => setState(() {
+              _month = DateTime(_yearNav, month, 1);
+              _pickingMonth = false;
+            }),
+            child: Center(
+              child: Text(
+                '$month 月',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: hasRecords ? AppColors.text : AppColors.text3,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDayCell(int lead, int dayCount, int week, int cell) {
+    final dayNumber = week * 7 + cell - lead + 1;
+    if (dayNumber < 1 || dayNumber > dayCount) {
+      return const SizedBox(height: 30);
+    }
+    final day = DateTime(_month.year, _month.month, dayNumber);
+    final key = _dayKey(day);
+    final available = _availableDays.contains(key);
+    var background = Colors.transparent;
+    var foreground = available ? AppColors.text : AppColors.text3;
+    if (!available) {
+      background = AppColors.surface3.withValues(alpha: 0.4);
+    } else {
+      background = AppColors.tealDim;
+      if (_first != null && _dayKey(_first!) == key) {
+        background = AppColors.teal;
+        foreground = AppColors.onAccent;
+      }
+      if (_second != null && _dayKey(_second!) == key) {
+        background = AppColors.teal;
+        foreground = AppColors.onAccent;
+      }
+    }
+    return Padding(
+      padding: const EdgeInsets.all(1),
+      child: SizedBox(
+        height: 30,
+        child: Material(
+          color: background,
+          borderRadius: BorderRadius.circular(6),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(6),
+            onTap: available ? () => _tapDay(day) : null,
+            child: Center(
+              child: Text(
+                '$dayNumber',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: foreground,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _hint() {
+    if (_pickingMonth) {
+      return '点月份直接跳转 · 再点年月标签返回日历';
+    }
+    if (_first == null) {
+      return '点第一天作为起点';
+    }
+    if (_second == null) {
+      return '起点 ${_label(_first!)} · 再点一天作为终点';
+    }
+    return '${_label(_first!)} → ${_label(_second!)}';
   }
 }
 
