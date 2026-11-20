@@ -11,6 +11,7 @@ import 'package:oasx/modules/home/controllers/dashboard_controller.dart';
 import 'package:oasx/modules/log/log_mixin.dart';
 import 'package:oasx/modules/server/models/deploy_git_prefetcher.dart';
 import 'package:oasx/modules/server/models/deploy_python_config.dart';
+import 'package:oasx/modules/server/models/oas_pythonw_cleaner.dart';
 import 'package:oasx/modules/settings/controllers/settings_controller.dart';
 import 'package:oasx/service/locale_service.dart';
 import 'package:oasx/service/script_service.dart';
@@ -29,9 +30,6 @@ class ServerController extends GetxController with LogMixin {
   Shell? shell;
   var shellController = ShellLinesController();
   var shellErrorController = ShellLinesController();
-
-  /// Tracks whether taskkill already reported that pythonw.exe is absent.
-  var _pythonwNotRunningLogged = false;
 
   @override
   void onInit() {
@@ -193,24 +191,11 @@ class ServerController extends GetxController with LogMixin {
   );
 
   /// Runs one shell command and records failures with the requested severity.
-  Future<bool> runShell(
-    String command, {
-    bool allowFailure = false,
-    bool ignorePythonwNotRunning = false,
-  }) async {
-    if (ignorePythonwNotRunning) {
-      _pythonwNotRunningLogged = false;
-    }
+  Future<bool> runShell(String command, {bool allowFailure = false}) async {
     try {
       await shell!.run(command);
       return true;
     } on ShellException catch (e) {
-      if (ignorePythonwNotRunning && _isPythonwNotRunningException(e)) {
-        if (!_pythonwNotRunningLogged) {
-          addLog('WARNING: pythonw.exe is not running, skip taskkill');
-        }
-        return true;
-      }
       _addShellExceptionLog(e, allowFailure: allowFailure);
       return false;
     }
@@ -225,38 +210,14 @@ class ServerController extends GetxController with LogMixin {
     addLog('$prefix: ${exception.toString()}');
   }
 
-  /// Detects the taskkill exit code used when pythonw.exe is absent.
-  bool _isPythonwNotRunningException(ShellException exception) {
-    final lower = exception.message.toLowerCase();
-    return exception.result?.exitCode == 128 &&
-        lower.contains('taskkill') &&
-        lower.contains('pythonw.exe');
-  }
-
   void _addShellErrorLine(String line) {
     final lower = line.toLowerCase();
-    final expectedTaskKillOutput = _isExpectedTaskKillOutput(lower);
-    if (expectedTaskKillOutput) {
-      _pythonwNotRunningLogged = true;
-      final message = line.replaceFirst(
-        RegExp(r'^\s*ERROR:\s*', caseSensitive: false),
-        '',
-      );
-      addLog('WARNING: $message');
-      return;
-    }
     if (_isGitProgressLine(lower)) {
       upsertLog('INFO: $line', _isGitProgressLog);
       return;
     }
     final isError = lower.contains('fatal:') || lower.contains('error:');
     addLog('${isError ? 'ERROR' : 'INFO'}: $line');
-  }
-
-  /// Detects taskkill output when no pythonw.exe process is running.
-  bool _isExpectedTaskKillOutput(String lowerLine) {
-    return lowerLine.contains('pythonw.exe') &&
-        (lowerLine.contains('not found') || lowerLine.contains('没有找到'));
   }
 
   bool _isGitProgressLine(String lowerLine) {
@@ -294,12 +255,9 @@ class ServerController extends GetxController with LogMixin {
       shell!.kill();
       await runShell('echo OAS working directory: ');
       await runShell('cd');
-      await runShell(
-        'taskkill /f /t /im pythonw.exe',
-        ignorePythonwNotRunning: true,
-      );
-      await prefetchRepository();
       final pythonConfig = DeployPythonConfig.read(rootPathServer.value);
+      await _stopOwnedPythonwProcesses(pythonConfig);
+      await prefetchRepository();
       await runShell(
         shellExecutableArguments(
           pythonConfig.getPythonPath(rootPathServer.value),
@@ -333,6 +291,39 @@ class ServerController extends GetxController with LogMixin {
       );
     } finally {
       isDeployLoading.value = false;
+    }
+  }
+
+  /// Stops the pythonw.exe processes that belong to this OAS install only.
+  ///
+  /// A machine-wide `taskkill /im pythonw.exe` also stops unrelated Python
+  /// tray apps, so ownership is decided by the interpreter image path instead
+  /// of the image name.
+  Future<void> _stopOwnedPythonwProcesses(
+    DeployPythonConfig pythonConfig,
+  ) async {
+    try {
+      final pythonwPath = pythonConfig.getPythonwPath(rootPathServer.value);
+      final cleaner = OasPythonwCleaner(
+        rootPath: rootPathServer.value,
+        pythonwPath: pythonwPath,
+      );
+      final result = await cleaner.cleanup();
+      if (!result.supported) {
+        return;
+      }
+      if (result.failure != null) {
+        addLog('WARNING: pythonw.exe cleanup skipped: ${result.failure}');
+        return;
+      }
+      if (result.selected.isEmpty) {
+        addLog('INFO: no pythonw.exe process of this OAS is running');
+        return;
+      }
+      final pids = result.killed.join(', ');
+      addLog('INFO: stopped OAS pythonw.exe (${result.killed.length}): $pids');
+    } catch (e) {
+      addLog('WARNING: pythonw.exe cleanup skipped: $e');
     }
   }
 
